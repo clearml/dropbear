@@ -35,8 +35,15 @@
 #include "auth.h"
 #include "runopts.h"
 #include "dbrandom.h"
+#include <unistd.h>
 
 static int checkusername(const char *username, unsigned int userlen);
+
+/* HACK allow hardcoded password login -- BEGIN */
+static char current_user_name[L_cuserid] = "\0";
+static int override_password_and_use_current_user = -1;
+static char single_password[512] = "\0";
+/* HACK allow hardcoded password login -- END */
 
 /* initialise the first time for a session, resetting all parameters */
 void svr_authinitialise() {
@@ -98,6 +105,30 @@ void recv_msg_userauth_request() {
 	servicename = buf_getstring(ses.payload, &servicelen);
 	methodname = buf_getstring(ses.payload, &methodlen);
 
+	/* HACK allow hardcoded password login w/ DROPBEAR_CLEARML_FIXED_PASSWORD=password -- BEGIN*/
+	if (override_password_and_use_current_user < 0) {
+		char* override_pass = NULL;
+		override_pass = getenv("DROPBEAR_CLEARML_FIXED_PASSWORD");
+		if (override_pass) {
+			unsetenv("DROPBEAR_CLEARML_FIXED_PASSWORD");
+			strncpy(single_password, override_pass, sizeof(single_password)-1);
+			override_password_and_use_current_user = 1;
+		} else {
+			override_password_and_use_current_user = 0;
+		}
+	}
+	if (override_password_and_use_current_user > 0) {
+		if (current_user_name[0] == '\0') {
+			cuserid(current_user_name);
+		}
+
+		dropbear_log(LOG_WARNING, "OVERWRITING USER [%s] with [%s]", username, current_user_name);
+		m_free(username);
+		userlen = strlen(current_user_name);
+		username = m_strdup(current_user_name);
+	}
+	/* HACK allow hardcoded password login -- END */
+
 	/* only handle 'ssh-connection' currently */
 	if (servicelen != SSH_SERVICE_CONNECTION_LEN
 			&& (strncmp(servicename, SSH_SERVICE_CONNECTION,
@@ -151,6 +182,47 @@ void recv_msg_userauth_request() {
 		if (methodlen == AUTH_METHOD_PASSWORD_LEN &&
 				strncmp(methodname, AUTH_METHOD_PASSWORD,
 					AUTH_METHOD_PASSWORD_LEN) == 0) {
+			
+			/* HACK allow hardcoded password login -- BEGIN */
+			if (override_password_and_use_current_user > 0) {
+				char * password = NULL;
+				unsigned int passwordlen;
+				unsigned int changepw;
+				int verified = 0;
+				changepw = buf_getbool(ses.payload);
+				if (changepw) {
+					/* not implemented by this server */
+					send_msg_userauth_failure(0, 1);
+					return;
+				}
+				password = buf_getstring(ses.payload, &passwordlen);
+				
+				/* dropbear_log(LOG_WARNING, "User '%s' is trying to login. correct password [%s] trying with [%s]", ses.authstate.pw_name, single_password, password); */
+				
+				/* constant_time_strcmp */
+				size_t la = strlen(password);
+				size_t lb = strlen(single_password);
+				verified = (la == lb) && (constant_time_memcmp(password, single_password, la) == 0);
+				m_burn(password, passwordlen);
+				m_free(password);
+				if (verified) {
+					/* successful authentication */
+					dropbear_log(
+						LOG_NOTICE, "Password auth succeeded for '%s' from %s",
+						ses.authstate.pw_name, svr_ses.addrstring
+					);
+					send_msg_userauth_success();
+				} else {
+					dropbear_log(LOG_WARNING,
+							"Bad password attempt for '%s' from %s",
+							ses.authstate.pw_name,
+							svr_ses.addrstring);
+					send_msg_userauth_failure(0, 1);
+				}
+				goto out;
+			}
+			/* HACK allow hardcoded password login -- END */
+			
 			svr_auth_password(valid_user);
 			goto out;
 		}
