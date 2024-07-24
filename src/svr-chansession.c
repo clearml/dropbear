@@ -682,7 +682,12 @@ static int sessioncommand(struct Channel *channel, struct ChanSess *chansess,
 		if (issubsys) {
 #if DROPBEAR_SFTPSERVER
 			if ((cmdlen == 4) && strncmp(chansess->cmd, "sftp", 4) == 0) {
-				char *expand_path = expand_homedir_path(SFTPSERVER_PATH);
+				char *expand_path = getenv("SFTPSERVER_PATH");
+				if ((expand_path) && (strlen(expand_path)>0)) {
+					expand_path = expand_homedir_path(expand_path);
+				} else {
+					expand_path = expand_homedir_path(SFTPSERVER_PATH);
+				}
 				m_free(chansess->cmd);
 				chansess->cmd = m_strdup(expand_path);
 				m_free(expand_path);
