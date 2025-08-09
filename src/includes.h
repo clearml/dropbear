@@ -56,6 +56,7 @@
 #include <dirent.h>
 #include <time.h>
 #include <setjmp.h>
+#include <assert.h>
 
 #ifdef HAVE_UTMP_H
 #include <utmp.h>
@@ -131,6 +132,14 @@
 #include <sys/prctl.h>
 #endif
 
+#ifdef HAVE_ENDIAN_H
+#include <endian.h>
+#endif
+
+#ifdef HAVE_SYS_ENDIAN_H
+#include <sys/endian.h>
+#endif
+
 #ifdef BUNDLED_LIBTOM
 #include "../libtomcrypt/src/headers/tomcrypt.h"
 #include "../libtommath/tommath.h"
@@ -193,6 +202,18 @@ extern char** environ;
 # define UNUSED(x) /*@unused@*/ x 
 #else 
 # define UNUSED(x) x 
+#endif
+
+/* static_assert() is a keyword in c23, earlier libc often supports
+ * it as a macro in assert.h.
+ * _Static_assert() is a keyword supported since c11.
+ * If neither are available, do nothing */
+#ifndef HAVE_STATIC_ASSERT
+#ifdef HAVE_UNDERSCORE_STATIC_ASSERT
+#define static_assert(condition, message) _Static_assert(condition, message)
+#else
+#define static_assert(condition, message)
+#endif
 #endif
 
 #endif /* DROPBEAR_INCLUDES_H_ */

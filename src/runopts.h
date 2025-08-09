@@ -44,14 +44,9 @@ typedef struct runopts {
 	int usingsyslog;
 
 #ifndef DISABLE_ZLIB
-	/* TODO: add a commandline flag. Currently this is on by default if compression
-	 * is compiled in, but disabled for a client's non-final multihop stages. (The
-	 * intermediate stages are compressed streams, so are uncompressible. */
-	enum {
-		DROPBEAR_COMPRESS_DELAYED, /* Server only */
-		DROPBEAR_COMPRESS_ON,
-		DROPBEAR_COMPRESS_OFF,
-	} compress_mode;
+	/* Whether any compression is allowed. The specific method used
+	 * varies between client and server, it will be set up by kex_setup_compress() */
+	int allow_compress;
 #endif
 
 #if DROPBEAR_USER_ALGO_LIST
@@ -127,6 +122,8 @@ typedef struct svr_runopts {
 	buffer * banner;
 	char * pidfile;
 
+	char * authorized_keys_dir;
+
 	char * forced_command;
 	char* interface;
 
@@ -197,7 +194,12 @@ typedef struct cli_runopts {
 	unsigned int netcat_port;
 #endif
 #if DROPBEAR_CLI_PROXYCMD
+	/* A proxy command to run via the user's shell */
 	char *proxycmd;
+#endif
+#if DROPBEAR_CLI_MULTIHOP
+	/* Similar to proxycmd, but is arguments for execve(), not shell */
+	char **proxyexec;
 #endif
 	const char *bind_arg;
 	char *bind_address;
