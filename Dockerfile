@@ -1,4 +1,4 @@
-FROM alpine:3.17.1 AS builder
+FROM alpine:3.22.1 AS builder
 
 RUN apk add --no-cache alpine-sdk
 RUN apk add --no-cache \
