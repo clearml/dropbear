@@ -8,7 +8,13 @@ RUN apk add --no-cache \
     bzip2 \
     bash
 
-RUN mkdir -p /root/dropbear/
+COPY . /root/dropbear/
+
 WORKDIR /root/dropbear/
 
-ENTRYPOINT ["bash"]
+RUN ./configure --disable-utmp --disable-wtmp --disable-lastlog --disable-zlib --disable-syslog --enable-static --disable-harden && make clean && make -j4 MULTI=1 PROGRAMS="dropbear dropbearconvert dropbearkey" && mv dropbearmulti dropbearmulti_ && make clean && mv dropbearmulti_ dropbearmulti && strip dropbearmulti
+RUN mkdir -p /tmp/dropbear/ && cp dropbearmulti /tmp/dropbear/
+
+# export stage
+FROM scratch AS export-stage
+COPY --from=builder /tmp/dropbear/dropbearmulti /dropbearmulti
